@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Spotter - Car Trip Multiplayer Game</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet JS & CSS for Map View -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 400: '#facc15', 500: '#eab308', 600: '#ca8a04' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+        .btn-active:active { transform: scale(0.96); }
+        .glass-panel { background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        #leaflet-map { height: 280px; width: 100%; border-radius: 1rem; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-amber-500 selection:text-slate-900 overflow-x-hidden">
+
+    <!-- APP HEADER -->
+    <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-30 px-4 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center space-x-2 cursor-pointer" onclick="app.navigate('setup')">
+            <div class="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-binoculars"></i>
+            </div>
+            <span class="font-black text-xl tracking-tight bg-gradient-to-r from-amber-400 to-yellow-200 bg-clip-text text-transparent">
+                SPOTTER
+            </span>
+        </div>
+        <div id="header-trip-info" class="hidden text-xs font-semibold px-3 py-1 bg-slate-800 rounded-full text-amber-400 border border-amber-500/30">
+            <i class="fa-solid fa-route mr-1"></i> <span id="header-trip-name">Trip</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <button onclick="app.openTemplatesModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-sliders text-xs"></i> Configs
+            </button>
+            <button id="reset-app-btn" onclick="app.confirmReset()" class="text-xs text-slate-400 hover:text-rose-400 transition-colors p-2">
+                <i class="fa-solid fa-power-off text-base"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main id="app-container" class="flex-1 w-full max-w-md mx-auto p-4 flex flex-col justify-start">
+        
+        <!-- DASHBOARD NAVIGATION TABS -->
+        <nav id="dashboard-tabs" class="grid grid-cols-2 gap-2 mb-4">
+            <button id="tab-btn-setup" onclick="app.switchTab('setup')" class="py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-amber-500 text-slate-950 shadow-md">
+                <i class="fa-solid fa-car"></i> New Journey
+            </button>
+            <button id="tab-btn-history" onclick="app.switchTab('history')" class="py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-trophy"></i> Leaderboards & Archive
+            </button>
+        </nav>
+
+        <!-- ================= PAGE 1: SETUP & CONFIG SELECTION ================= -->
+        <section id="page-setup" class="space-y-5 animate-fade-in">
+            <div class="text-center space-y-1">
+                <h1 class="text-2xl font-extrabold text-white">Car Trip Spotter</h1>
+                <p class="text-sm text-slate-400">Log road sights with GPS & timestamps, out-score friends!</p>
+            </div>
+
+            <!-- Game Mode Selector -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-gamepad"></i> Select Game Mode
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="mode-btn-topscorer" onclick="app.setGameMode('topscorer')" class="p-3 rounded-xl border text-left transition-all bg-amber-500/20 border-amber-500 text-amber-300">
+                        <div class="font-bold text-xs flex items-center gap-1.5">
+                            <i class="fa-solid fa-trophy text-amber-400"></i> Mode 1: Top Scorer
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1">Competitive. Select who spotted each item. No wagers needed.</div>
+                    </button>
+                    <button type="button" id="mode-btn-target" onclick="app.setGameMode('target')" class="p-3 rounded-xl border text-left transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700">
+                        <div class="font-bold text-xs flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullseye text-amber-400"></i> Mode 2: Group Target
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1">Co-op / Wager. Set target pts, tap to spot as a team without selecting names.</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Spotter Config Selector -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-layer-group"></i> Spotter Config Template
+                    </label>
+                    <button onclick="app.openTemplateEditor()" class="text-xs text-amber-400 font-semibold hover:underline flex items-center gap-1">
+                        <i class="fa-solid fa-plus text-[10px]"></i> Create New
+                    </button>
+                </div>
+                <select id="template-select" onchange="app.selectTemplate(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500 outline-none text-white">
+                    <!-- Populated dynamically -->
+                </select>
+                <div id="template-preview" class="text-xs text-slate-400 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 space-y-1">
+                    <div class="flex justify-between font-semibold text-slate-200">
+                        <span id="template-name-display">Template</span>
+                        <span id="template-count-display">0 Items</span>
+                    </div>
+                    <p id="template-desc-display" class="text-[11px] text-slate-400 italic">Description of template...</p>
+                </div>
+            </div>
+
+            <!-- Saved Trip Presets -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-location-dot"></i> Saved Journey Route Name
+                </label>
+                <input type="text" id="trip-route-name" placeholder="e.g. Home to Grandad's, M6 Highway" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-medium outline-none focus:border-amber-500">
+                <div id="saved-routes-section" class="space-y-1 pt-1">
+                    <div class="text-[11px] font-semibold text-slate-400">Quick-Select Saved Routes:</div>
+                    <div id="saved-routes-chips" class="flex flex-wrap gap-1.5">
+                        <!-- Dynamic Saved Route Chips -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Setup -->
+            <div class="glass-panel p-4 rounded-2xl space-y-4">
+                <div class="flex justify-between items-center">
+                    <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-users"></i> Passengers (2-6 Players)
+                    </label>
+                    <span id="player-count-badge" class="text-xs text-slate-400">2 Players</span>
+                </div>
+
+                <!-- Quick Select Saved Passengers -->
+                <div id="saved-passengers-section" class="space-y-1.5 pb-2 border-b border-slate-800">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[11px] font-semibold text-slate-400">Quick-Add Saved Passengers:</span>
+                        <span class="text-[10px] text-slate-500 italic">Tap to add</span>
+                    </div>
+                    <div id="saved-passengers-chips" class="flex flex-wrap gap-1.5">
+                        <!-- Dynamic Saved Player Chips -->
+                    </div>
+                </div>
+
+                <div id="players-list-inputs" class="space-y-2">
+                    <!-- Dynamic player input rows -->
+                </div>
+
+                <button onclick="app.addPlayerInput()" id="add-player-btn" class="w-full py-2 border border-dashed border-slate-700 hover:border-amber-500/50 rounded-xl text-xs font-semibold text-slate-400 hover:text-amber-400 transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-user-plus"></i> Add Another Player
+                </button>
+            </div>
+
+            <!-- Start Journey Action Button -->
+            <button onclick="app.handleStartJourneyClick()" id="start-journey-btn" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-lg shadow-lg shadow-amber-500/20 btn-active flex items-center justify-center gap-2">
+                Start Journey! <i class="fa-solid fa-flag-checkered"></i>
+            </button>
+        </section>
+
+
+        <!-- ================= PAGE: ROUTE LEADERBOARDS & TRIP ARCHIVE ================= -->
+        <section id="page-history" class="hidden space-y-5 animate-fade-in">
+            <div class="text-center space-y-1">
+                <h1 class="text-2xl font-extrabold text-white">Trip Leaderboards & Stats</h1>
+                <p class="text-sm text-slate-400">Route records, passenger standings, and past trip archives</p>
+            </div>
+
+            <!-- Route Filter Dropdown & Overall Stats -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-route"></i> Select Route Leaderboard
+                    </label>
+                    <span id="route-stats-count" class="text-[11px] text-slate-400 font-medium">0 Journeys Logged</span>
+                </div>
+                <select id="route-leaderboard-select" onchange="app.renderRouteLeaderboards(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500 outline-none text-white">
+                    <option value="ALL">All Routes (Overall Standings)</option>
+                </select>
+            </div>
+
+            <!-- Leaderboard Cards -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <h3 id="leaderboard-card-title" class="text-xs font-bold text-amber-400 uppercase tracking-wider">Passenger Hall of Fame</h3>
+                    <span class="text-[10px] text-slate-500 italic">Ranked by Total Wins & Pts</span>
+                </div>
+                <div id="leaderboard-list-container" class="space-y-2">
+                    <!-- Dynamic passenger rankings -->
+                </div>
+            </div>
+
+            <!-- Past Trips Archive -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+                    <span><i class="fa-solid fa-box-archive mr-1"></i> Past Journeys Archive</span>
+                </h3>
+                <div id="past-trips-archive-list" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <!-- Dynamic past trips -->
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ================= PAGE 2: BETTING PHASE (For Mode 2 / Target) ================= -->
+        <section id="page-betting" class="hidden space-y-6">
+            <div class="text-center space-y-1">
+                <h1 class="text-2xl font-extrabold text-white">Set Target Wager</h1>
+                <p class="text-sm text-slate-400">Predict the total points the group will score on this journey!</p>
+            </div>
+
+            <div class="glass-panel p-5 rounded-2xl space-y-3">
+                <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+                    <span><i class="fa-solid fa-bullseye mr-1"></i> Group Journey Target Score</span>
+                </label>
+                <div class="flex items-center gap-3">
+                    <input type="number" id="group-target-input" value="300" step="25" min="25" max="20000"
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-black text-amber-400 text-center outline-none focus:border-amber-500">
+                    <span class="text-base font-extrabold text-slate-400">PTS</span>
+                </div>
+                <p class="text-[11px] text-slate-400 italic">As you spot items along the way, your team's live score progress bar will climb towards this target.</p>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button onclick="app.navigate('setup')" class="w-1/3 py-3 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-slate-300 transition-colors">
+                    Back
+                </button>
+                <button onclick="app.startTrip()" class="w-2/3 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-slate-950 font-black rounded-xl text-base shadow-lg shadow-amber-500/20 btn-active flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-flag-checkered"></i> Start Journey!
+                </button>
+            </div>
+        </section>
+
+
+        <!-- ================= PAGE 3: ACTIVE GAME DASHBOARD ================= -->
+        <section id="page-game" class="hidden space-y-4">
+            
+            <!-- Active Player Selector Strip (Mode 1 Only) -->
+            <div id="active-player-strip" class="glass-panel p-2 rounded-2xl">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-1.5">Tap active spotter:</p>
+                <div id="active-player-selector" class="grid grid-cols-2 gap-2">
+                    <!-- Dynamic player buttons -->
+                </div>
+            </div>
+
+            <!-- Targets Grid (Sighting Buttons) -->
+            <div>
+                <div class="flex justify-between items-center mb-2 px-1">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Tap Sighting Target</h2>
+                    <span id="gps-status-badge" class="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
+                        <i class="fa-solid fa-location-crosshairs"></i> GPS Ready
+                    </span>
+                </div>
+                <div id="targets-grid" class="grid grid-cols-2 gap-2.5">
+                    <!-- Dynamic Sighting Buttons -->
+                </div>
+            </div>
+
+            <!-- Live Score Board & Recent Activity -->
+            <div class="glass-panel p-3.5 rounded-2xl space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-xs font-bold text-amber-400 uppercase tracking-wider" id="standings-header-title">Live Standings</span>
+                    <button id="undo-btn" onclick="app.undoLastSpot()" disabled class="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40 disabled:hover:text-amber-400 flex items-center gap-1 font-bold">
+                        <i class="fa-solid fa-rotate-left"></i> Undo Last Spot
+                    </button>
+                </div>
+                
+                <div id="live-standings-list" class="space-y-2">
+                    <!-- Dynamic player or group score progress bars -->
+                </div>
+            </div>
+
+            <!-- Feed Log & Finish Journey -->
+            <div class="space-y-2">
+                <div id="recent-log-container" class="bg-slate-900/90 rounded-xl p-2.5 border border-slate-800 text-xs text-slate-300 max-h-32 overflow-y-auto space-y-1.5">
+                    <div class="text-slate-500 italic text-center">No sightings logged yet.</div>
+                </div>
+
+                <button onclick="app.confirmEndTrip()" class="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl text-base shadow-lg shadow-rose-900/30 btn-active flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-flag-checkered"></i> Finish Journey & View Map
+                </button>
+            </div>
+        </section>
+
+
+        <!-- ================= PAGE 4: RESULTS & MAP SUMMARY ================= -->
+        <section id="page-results" class="hidden space-y-5 animate-fade-in">
+            <!-- Winner Crown Card -->
+            <div class="glass-panel p-6 rounded-3xl text-center space-y-3 relative overflow-hidden border border-amber-500/40">
+                <div class="w-16 h-16 bg-gradient-to-tr from-amber-500 to-yellow-300 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-amber-500/30 text-slate-950 text-2xl font-black">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <div>
+                    <span id="results-badge-subtitle" class="text-xs font-bold uppercase text-amber-400 tracking-widest">Journey Champion</span>
+                    <h2 id="winner-name" class="text-3xl font-black text-white mt-0.5">Player Name</h2>
+                    <p id="winner-score" class="text-sm text-slate-300 font-semibold mt-1">Scored 0 Points</p>
+                </div>
+            </div>
+
+            <!-- Leaflet Map Container -->
+            <div class="glass-panel p-3 rounded-2xl space-y-2">
+                <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+                    <span><i class="fa-solid fa-map"></i> Sightings Map</span>
+                    <span id="map-marker-count" class="text-slate-400 font-normal">0 Spots Plotted</span>
+                </h3>
+                <div id="leaflet-map" class="z-10"></div>
+            </div>
+
+            <!-- Final Leaderboard -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider" id="final-standings-title">Final Standings</h3>
+                <div id="final-leaderboard" class="space-y-3">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+            <!-- Export & Restart Actions -->
+            <div class="space-y-2 pt-2">
+                <div class="flex gap-2">
+                    <button onclick="app.exportTripCSV()" class="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                    <button onclick="app.exportTripJSON()" class="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-400 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-code"></i> Export JSON
+                    </button>
+                </div>
+                <button onclick="app.navigate('setup')" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 text-slate-950 font-black rounded-xl text-base shadow-lg shadow-amber-500/20 btn-active flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> Start Another Journey
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="py-3 text-center text-xs text-slate-500 border-t border-slate-900">
+        Spotter &bull; Configurable Car Game with GPS Logging
+    </footer>
+
+    <!-- MODAL: TRIP DETAILS ARCHIVE VIEWER -->
+    <div id="trip-details-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-5 space-y-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 id="archive-modal-title" class="font-bold text-lg text-white">Trip Details</h3>
+                    <div id="archive-modal-subtitle" class="text-xs text-slate-400">Date &bull; Route</div>
+                </div>
+                <button onclick="app.closeTripDetailsModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <div id="archive-modal-winner" class="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-center space-y-1">
+                <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Result</span>
+                <div id="archive-winner-name" class="text-xl font-black text-white">Player / Group</div>
+                <div id="archive-winner-score" class="text-xs text-slate-300">0 Points</div>
+            </div>
+
+            <!-- Leaflet Map Container for Archived Trip -->
+            <div class="space-y-1">
+                <label class="text-xs font-bold text-amber-400 uppercase tracking-wider">Route Sighting Map</label>
+                <div id="archive-leaflet-map" class="h-48 w-full rounded-xl z-10"></div>
+            </div>
+
+            <!-- Scores Breakdown -->
+            <div class="space-y-2">
+                <label class="text-xs font-bold text-amber-400 uppercase tracking-wider">Scores Breakdown</label>
+                <div id="archive-scores-list" class="space-y-1.5 text-xs">
+                    <!-- Dynamic scores -->
+                </div>
+            </div>
+
+            <!-- Sightings Feed -->
+            <div class="space-y-2">
+                <label class="text-xs font-bold text-amber-400 uppercase tracking-wider">Sightings Log</label>
+                <div id="archive-sightings-list" class="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1.5 max-h-36 overflow-y-auto">
+                    <!-- Dynamic sightings -->
+                </div>
+            </div>
+
+            <button onclick="app.closeTripDetailsModal()" class="w-full py-2.5 bg-slate-800 text-slate-300 rounded-xl text-sm font-semibold">Close Archive</button>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIG TEMPLATE EDITOR -->
+    <div id="template-editor-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-5 space-y-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <h3 id="editor-modal-title" class="font-bold text-lg text-white">Create Config Template</h3>
+                <button onclick="app.closeTemplateEditor()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-slate-300">Template Title</label>
+                    <input type="text" id="edit-template-name" placeholder="e.g. Birds of Prey" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-300">Description</label>
+                    <input type="text" id="edit-template-desc" placeholder="e.g. Spot hawks, eagles, and owls along countryside routes" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-amber-500">
+                </div>
+                
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-semibold text-slate-300">Items / Targets</label>
+                        <button type="button" onclick="app.addEditorItemRow()" class="text-xs text-amber-400 font-semibold hover:underline">+ Add Item</button>
+                    </div>
+                    <div id="editor-items-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        <!-- Dynamic item rows -->
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2 pt-2 border-t border-slate-800">
+                <button onclick="app.closeTemplateEditor()" class="w-1/2 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-sm font-semibold">Cancel</button>
+                <button onclick="app.saveCustomTemplate()" class="w-1/2 py-2.5 bg-amber-500 text-slate-950 rounded-xl text-sm font-bold">Save Template</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: TEMPLATE MANAGER LIST -->
+    <div id="templates-list-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-lg text-white">Spotter Config Templates</h3>
+                <button onclick="app.closeTemplatesModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="templates-manager-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <!-- Dynamic templates list -->
+            </div>
+            <button onclick="app.openTemplateEditor()" class="w-full py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-plus"></i> Create Custom Template
+            </button>
+        </div>
+    </div>
+
+    <!-- CONFIRMATION DIALOG -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 text-center shadow-2xl">
+            <div class="w-12 h-12 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirm-title" class="font-bold text-lg text-white">Are you sure?</h3>
+            <p id="confirm-desc" class="text-xs text-slate-400">This action cannot be undone.</p>
+            <div class="flex gap-2 pt-2">
+                <button onclick="app.closeConfirmModal(false)" class="w-1/2 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-sm font-semibold">Cancel</button>
+                <button id="confirm-action-btn" class="w-1/2 py-2.5 bg-rose-600 text-white rounded-xl text-sm font-bold">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP LOGIC -->
+    <script>
+        // Preset Spotter Config Templates
+        const BUILTIN_TEMPLATES = {
+            'trainspotting': {
+                id: 'trainspotting',
+                name: 'Trainspotting Master',
+                description: 'Classics, freight, and high-speed locos',
+                isBuiltin: true,
+                items: [
+                    { id: 'tr1', name: 'InterCity 125 (HST)', points: 125, icon: 'fa-train', desc: 'Iconic high-speed train' },
+                    { id: 'tr2', name: 'Steam Locomotive', points: 300, icon: 'fa-steam-symbol', desc: 'Rare vintage steam engine' },
+                    { id: 'tr3', name: 'Heavy Freight Loco', points: 40, icon: 'fa-train-subway', desc: 'Cargo or container train' },
+                    { id: 'tr4', name: 'High-Speed Rail', points: 80, icon: 'fa-bolt', desc: 'Modern bullet/express' },
+                    { id: 'tr5', name: 'Commuter EMU', points: 15, icon: 'fa-train', desc: 'Standard passenger train' },
+                    { id: 'tr6', name: 'Maintenance Vehicle', points: 150, icon: 'fa-screwdriver-wrench', desc: 'Track repair/yellow loco' }
+                ]
+            },
+            'dog_breeds': {
+                id: 'dog_breeds',
+                name: 'Dog Breed Spotting',
+                description: 'Spot hounds, lapdogs, and rare breeds',
+                isBuiltin: true,
+                items: [
+                    { id: 'dg1', name: 'Great Dane', points: 500, icon: 'fa-dog', desc: 'Gentle giant breed' },
+                    { id: 'dg2', name: 'Black Lab / Golden', points: 20, icon: 'fa-dog', desc: 'Popular retriever' },
+                    { id: 'dg3', name: 'Dachshund (Sausage)', points: 50, icon: 'fa-dog', desc: 'Short legs, long body' },
+                    { id: 'dg4', name: 'Poodle / Doodle', points: 30, icon: 'fa-dog', desc: 'Curly coat dog' },
+                    { id: 'dg5', name: 'Rare Hound / Afghan', points: 200, icon: 'fa-dog', desc: 'Uncommon sight' },
+                    { id: 'dg6', name: 'Bulldog / Pug', points: 40, icon: 'fa-dog', desc: 'Wrinkly flat face' }
+                ]
+            },
+            'classic_cars': {
+                id: 'classic_cars',
+                name: 'Classic & Exotic Cars',
+                description: 'Vintage models, supercars, and campers',
+                isBuiltin: true,
+                items: [
+                    { id: 'car1', name: 'Vintage Mini / Beetle', points: 50, icon: 'fa-car-side', desc: 'Classic compact icon' },
+                    { id: 'car2', name: 'Supercar / Exotic', points: 150, icon: 'fa-car', desc: 'Ferrari, Lambo, Porsche' },
+                    { id: 'car3', name: 'Campervan / VW Bus', points: 30, icon: 'fa-caravan', desc: 'Classic camper' },
+                    { id: 'car4', name: 'Electric Vehicle (EV)', points: 10, icon: 'fa-charging-station', desc: 'Green license plate' },
+                    { id: 'car5', name: 'Convertible (Top Down)', points: 40, icon: 'fa-sun', desc: 'Open top vehicle' },
+                    { id: 'car6', name: 'Limousine', points: 100, icon: 'fa-car', desc: 'Stretch luxury car' }
+                ]
+            },
+            'road_trip_standard': {
+                id: 'road_trip_standard',
+                name: 'Standard Road Trip',
+                description: 'Classic car game targets',
+                isBuiltin: true,
+                items: [
+                    { id: 'rt1', name: 'Yellow Car', points: 20, icon: 'fa-car', desc: 'Bright yellow paint' },
+                    { id: 'rt2', name: 'Police Car', points: 50, icon: 'fa-car-on', desc: 'Emergency response' },
+                    { id: 'rt3', name: 'Wind Turbine', points: 100, icon: 'fa-fan', desc: 'Renewable energy windmill' },
+                    { id: 'rt4', name: 'Speed Camera', points: 40, icon: 'fa-camera', desc: 'Yellow speed box' },
+                    { id: 'rt5', name: 'Bridge / Arch', points: 15, icon: 'fa-archway', desc: 'Overpass or river bridge' },
+                    { id: 'rt6', name: 'Horse / Livestock', points: 25, icon: 'fa-horse', desc: 'Animals in field' }
+                ]
+            }
+        };
+
+        const PLAYER_COLORS = [
+            { bg: 'bg-amber-500', text: 'text-amber-400', hex: '#facc15' },
+            { bg: 'bg-sky-500', text: 'text-sky-400', hex: '#38bdf8' },
+            { bg: 'bg-emerald-500', text: 'text-emerald-400', hex: '#34d399' },
+            { bg: 'bg-rose-500', text: 'text-rose-400', hex: '#fb7185' },
+            { bg: 'bg-purple-500', text: 'text-purple-400', hex: '#c084fc' },
+            { bg: 'bg-orange-500', text: 'text-orange-400', hex: '#fb923c' }
+        ];
+
+        class SpotterApp {
+            constructor() {
+                this.templates = this.loadStoredTemplates();
+                this.savedPlayerNames = this.loadSavedPlayerNames();
+                this.savedRoutes = this.loadSavedRoutes();
+                this.routeTemplatePairs = this.loadRouteTemplatePairs();
+                this.tripHistory = this.loadTripHistory();
+
+                this.gameMode = 'topscorer'; // 'topscorer' or 'target'
+                this.selectedTemplateId = Object.keys(this.templates)[0];
+                this.setupPlayers = this.loadLastPlayerSetup();
+                this.editingTemplateId = null;
+                
+                // Session State
+                this.session = {
+                    active: false,
+                    gameMode: 'topscorer',
+                    routeName: '',
+                    templateName: '',
+                    items: [],
+                    players: [],
+                    groupScore: 0,
+                    groupTarget: 300,
+                    activePlayerId: null,
+                    history: []
+                };
+
+                this.leafletMap = null;
+                this.archiveLeafletMap = null;
+                this.mapMarkers = [];
+                this.archiveMapMarkers = [];
+                this.pendingConfirmCallback = null;
+
+                this.init();
+            }
+
+            init() {
+                this.loadActiveSession();
+                this.renderTemplateSelect();
+                this.renderSavedPassengerChips();
+                this.renderSavedRouteChips();
+                this.renderPlayerInputs();
+                this.setGameMode(this.gameMode);
+                
+                if (this.session.active) {
+                    this.navigate('game');
+                } else {
+                    this.navigate('setup');
+                }
+            }
+
+            setGameMode(mode) {
+                this.gameMode = mode;
+                const btn1 = document.getElementById('mode-btn-topscorer');
+                const btn2 = document.getElementById('mode-btn-target');
+                const startBtn = document.getElementById('start-journey-btn');
+
+                if (mode === 'topscorer') {
+                    btn1.className = 'p-3 rounded-xl border text-left transition-all bg-amber-500/20 border-amber-500 text-amber-300';
+                    btn2.className = 'p-3 rounded-xl border text-left transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700';
+                    startBtn.innerHTML = 'Start Journey! <i class="fa-solid fa-flag-checkered"></i>';
+                } else {
+                    btn2.className = 'p-3 rounded-xl border text-left transition-all bg-amber-500/20 border-amber-500 text-amber-300';
+                    btn1.className = 'p-3 rounded-xl border text-left transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700';
+                    startBtn.innerHTML = 'Continue to Target Wager <i class="fa-solid fa-arrow-right"></i>';
+                }
+            }
+
+            handleStartJourneyClick() {
+                if (this.gameMode === 'target') {
+                    this.navigate('betting');
+                } else {
+                    this.startTrip();
+                }
+            }
+
+            // Storage
+            loadStoredTemplates() {
+                const stored = localStorage.getItem('spotter_custom_templates');
+                if (stored) {
+                    try { return { ...BUILTIN_TEMPLATES, ...JSON.parse(stored) }; } catch (e) { console.error(e); }
+                }
+                return { ...BUILTIN_TEMPLATES };
+            }
+
+            loadSavedPlayerNames() {
+                const saved = localStorage.getItem('spotter_saved_player_names');
+                if (saved) {
+                    try { return JSON.parse(saved); } catch (e) { console.error(e); }
+                }
+                return ['Partner', 'Kids', 'Grandad', 'Alex', 'Sam'];
+            }
+
+            saveSavedPlayerNames() {
+                localStorage.setItem('spotter_saved_player_names', JSON.stringify(this.savedPlayerNames));
+            }
+
+            loadSavedRoutes() {
+                const saved = localStorage.getItem('spotter_saved_routes');
+                if (saved) {
+                    try { return JSON.parse(saved); } catch (e) { console.error(e); }
+                }
+                return ['Home to Grandad\'s', 'Yarrow Valley Drive', 'School Run'];
+            }
+
+            saveSavedRoutes() {
+                localStorage.setItem('spotter_saved_routes', JSON.stringify(this.savedRoutes));
+            }
+
+            loadRouteTemplatePairs() {
+                const saved = localStorage.getItem('spotter_route_template_pairs');
+                if (saved) {
+                    try { return JSON.parse(saved); } catch (e) { console.error(e); }
+                }
+                return {};
+            }
+
+            saveRouteTemplatePair(routeName, templateId) {
+                if (!routeName) return;
+                this.routeTemplatePairs[routeName] = templateId;
+                localStorage.setItem('spotter_route_template_pairs', JSON.stringify(this.routeTemplatePairs));
+            }
+
+            loadTripHistory() {
+                const saved = localStorage.getItem('spotter_completed_trips_history');
+                if (saved) {
+                    try { return JSON.parse(saved); } catch (e) { console.error(e); }
+                }
+                return [];
+            }
+
+            saveTripHistory() {
+                localStorage.setItem('spotter_completed_trips_history', JSON.stringify(this.tripHistory));
+            }
+
+            loadLastPlayerSetup() {
+                const saved = localStorage.getItem('spotter_last_player_setup');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.length >= 2) return parsed;
+                    } catch (e) { console.error(e); }
+                }
+                return ['Player 1', 'Player 2'];
+            }
+
+            saveLastPlayerSetup() {
+                localStorage.setItem('spotter_last_player_setup', JSON.stringify(this.setupPlayers));
+            }
+
+            saveCustomTemplates() {
+                const customOnly = {};
+                Object.keys(this.templates).forEach(key => {
+                    if (!this.templates[key].isBuiltin) customOnly[key] = this.templates[key];
+                });
+                localStorage.setItem('spotter_custom_templates', JSON.stringify(customOnly));
+            }
+
+            saveActiveSession() {
+                if (this.session.active) {
+                    localStorage.setItem('spotter_active_session', JSON.stringify(this.session));
+                } else {
+                    localStorage.removeItem('spotter_active_session');
+                }
+            }
+
+            loadActiveSession() {
+                const saved = localStorage.getItem('spotter_active_session');
+                if (saved) {
+                    try { this.session = JSON.parse(saved); } catch (e) { this.session.active = false; }
+                }
+            }
+
+            // Navigation & Tabs
+            switchTab(tabId) {
+                const setupBtn = document.getElementById('tab-btn-setup');
+                const historyBtn = document.getElementById('tab-btn-history');
+
+                if (tabId === 'setup') {
+                    setupBtn.className = 'py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-amber-500 text-slate-950 shadow-md';
+                    historyBtn.className = 'py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white';
+                    this.navigate('setup');
+                } else if (tabId === 'history') {
+                    historyBtn.className = 'py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-amber-500 text-slate-950 shadow-md';
+                    setupBtn.className = 'py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white';
+                    this.renderHistoryLeaderboardsPage();
+                    this.navigate('history');
+                }
+            }
+
+            navigate(pageId) {
+                ['setup', 'history', 'betting', 'game', 'results'].forEach(id => {
+                    const el = document.getElementById(`page-${id}`);
+                    if (el) el.classList.add('hidden');
+                });
+                
+                const tabsNav = document.getElementById('dashboard-tabs');
+                if (pageId === 'setup' || pageId === 'history') {
+                    tabsNav.classList.remove('hidden');
+                } else {
+                    tabsNav.classList.add('hidden');
+                }
+
+                const targetPage = document.getElementById(`page-${pageId}`);
+                if (targetPage) targetPage.classList.remove('hidden');
+
+                const headerInfo = document.getElementById('header-trip-info');
+                if (pageId === 'game' || pageId === 'results') {
+                    headerInfo.classList.remove('hidden');
+                    document.getElementById('header-trip-name').textContent = this.session.routeName || this.session.templateName || 'Trip';
+                } else {
+                    headerInfo.classList.add('hidden');
+                }
+
+                if (pageId === 'results') {
+                    setTimeout(() => this.renderResultsMap(), 200);
+                }
+
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            // ROUTE QUICK CHIPS & PERSISTENCE
+            renderSavedRouteChips() {
+                const container = document.getElementById('saved-routes-chips');
+                if (!container) return;
+                container.innerHTML = '';
+
+                if (this.savedRoutes.length === 0) {
+                    container.innerHTML = '<span class="text-[10px] text-slate-500 italic">No saved routes yet.</span>';
+                    return;
+                }
+
+                this.savedRoutes.forEach(routeName => {
+                    const chip = document.createElement('div');
+                    chip.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-slate-900 text-slate-300 border border-slate-700 hover:border-amber-500/50 transition-all';
+                    chip.innerHTML = `
+                        <span onclick="app.selectQuickRoute('${routeName.replace(/'/g, "\\'")}')"><i class="fa-solid fa-route text-[10px] text-amber-400"></i> ${routeName}</span>
+                        <button onclick="event.stopPropagation(); app.deleteSavedRoute('${routeName.replace(/'/g, "\\'")}')" class="text-slate-500 hover:text-rose-400 ml-1 text-[10px]">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    `;
+                    container.appendChild(chip);
+                });
+            }
+
+            selectQuickRoute(routeName) {
+                const input = document.getElementById('trip-route-name');
+                if (input) input.value = routeName;
+
+                if (this.routeTemplatePairs[routeName] && this.templates[this.routeTemplatePairs[routeName]]) {
+                    const templateId = this.routeTemplatePairs[routeName];
+                    this.selectedTemplateId = templateId;
+                    const select = document.getElementById('template-select');
+                    if (select) select.value = templateId;
+                    this.selectTemplate(templateId);
+                }
+            }
+
+            persistRouteName(routeName) {
+                const trimmed = routeName.trim();
+                if (trimmed && !this.savedRoutes.includes(trimmed)) {
+                    this.savedRoutes.push(trimmed);
+                    this.saveSavedRoutes();
+                    this.renderSavedRouteChips();
+                }
+            }
+
+            deleteSavedRoute(routeName) {
+                this.savedRoutes = this.savedRoutes.filter(r => r !== routeName);
+                this.saveSavedRoutes();
+                this.renderSavedRouteChips();
+            }
+
+            // TEMPLATE MANAGEMENT
+            renderTemplateSelect() {
+                const select = document.getElementById('template-select');
+                select.innerHTML = '';
+                Object.values(this.templates).forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = `${t.name}${t.isBuiltin ? '' : ' (Custom)'}`;
+                    if (t.id === this.selectedTemplateId) opt.selected = true;
+                    select.appendChild(opt);
+                });
+                this.selectTemplate(this.selectedTemplateId);
+            }
+
+            selectTemplate(templateId) {
+                this.selectedTemplateId = templateId;
+                const tmpl = this.templates[templateId] || Object.values(this.templates)[0];
+                if (!tmpl) return;
+
+                document.getElementById('template-name-display').textContent = tmpl.name;
+                document.getElementById('template-count-display').textContent = `${tmpl.items.length} Target Items`;
+                document.getElementById('template-desc-display').textContent = tmpl.description || 'Configurable spotter template';
+            }
+
+            openTemplatesModal() {
+                const container = document.getElementById('templates-manager-list');
+                container.innerHTML = '';
+
+                Object.values(this.templates).forEach(t => {
+                    const row = document.createElement('div');
+                    row.className = 'bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs';
+                    row.innerHTML = `
+                        <div>
+                            <div class="font-bold text-white">${t.name}</div>
+                            <div class="text-[10px] text-slate-400">${t.items.length} items ${t.isBuiltin ? '&bull; Built-in' : ''}</div>
+                        </div>
+                        <div class="flex gap-1.5">
+                            ${!t.isBuiltin ? `
+                                <button onclick="app.openTemplateEditor('${t.id}')" class="text-amber-400 p-1 hover:text-amber-300"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button onclick="app.deleteTemplate('${t.id}')" class="text-rose-400 p-1 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+                            ` : '<span class="text-[10px] text-slate-500 italic">Preset</span>'}
+                        </div>
+                    `;
+                    container.appendChild(row);
+                });
+
+                document.getElementById('templates-list-modal').classList.remove('hidden');
+            }
+
+            closeTemplatesModal() {
+                document.getElementById('templates-list-modal').classList.add('hidden');
+            }
+
+            openTemplateEditor(templateId = null) {
+                this.closeTemplatesModal();
+                this.editingTemplateId = templateId;
+                const modal = document.getElementById('template-editor-modal');
+                const title = document.getElementById('editor-modal-title');
+                const itemsContainer = document.getElementById('editor-items-list');
+
+                itemsContainer.innerHTML = '';
+
+                if (templateId && this.templates[templateId]) {
+                    const tmpl = this.templates[templateId];
+                    title.textContent = 'Edit Config Template';
+                    document.getElementById('edit-template-name').value = tmpl.name;
+                    document.getElementById('edit-template-desc').value = tmpl.description || '';
+                    tmpl.items.forEach(item => this.addEditorItemRow(item.name, item.points, item.desc));
+                } else {
+                    title.textContent = 'Create Config Template';
+                    document.getElementById('edit-template-name').value = '';
+                    document.getElementById('edit-template-desc').value = '';
+                    this.addEditorItemRow('Rare Sighting', 100, 'Custom description');
+                    this.addEditorItemRow('Common Spot', 20, 'Common item');
+                }
+
+                modal.classList.remove('hidden');
+            }
+
+            closeTemplateEditor() {
+                document.getElementById('template-editor-modal').classList.add('hidden');
+            }
+
+            addEditorItemRow(name = '', points = 20, desc = '') {
+                const container = document.getElementById('editor-items-list');
+                const row = document.createElement('div');
+                row.className = 'editor-item-row bg-slate-900 border border-slate-800 p-2 rounded-xl space-y-1.5';
+                row.innerHTML = `
+                    <div class="flex gap-2">
+                        <input type="text" placeholder="Item name" value="${name}" class="item-name flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none">
+                        <input type="number" placeholder="Pts" value="${points}" step="5" class="item-points w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-bold outline-none text-center">
+                        <button type="button" onclick="this.closest('.editor-item-row').remove()" class="text-rose-400 p-1 hover:text-rose-300 text-xs"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <input type="text" placeholder="Short description / rarity tag" value="${desc}" class="item-desc w-full bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-300 outline-none">
+                `;
+                container.appendChild(row);
+            }
+
+            saveCustomTemplate() {
+                const name = document.getElementById('edit-template-name').value.trim() || 'Custom Config';
+                const desc = document.getElementById('edit-template-desc').value.trim() || 'User created config template';
+                const itemRows = document.querySelectorAll('.editor-item-row');
+
+                const items = [];
+                itemRows.forEach((row, idx) => {
+                    const itemName = row.querySelector('.item-name').value.trim();
+                    const itemPts = parseInt(row.querySelector('.item-points').value, 10) || 10;
+                    const itemDesc = row.querySelector('.item-desc').value.trim();
+                    if (itemName) {
+                        items.push({
+                            id: 'ci_' + idx + '_' + Date.now(),
+                            name: itemName,
+                            points: itemPts,
+                            icon: itemPts >= 100 ? 'fa-star' : 'fa-binoculars',
+                            desc: itemDesc
+                        });
+                    }
+                });
+
+                if (items.length === 0) {
+                    alert('Please add at least one item to the template!');
+                    return;
+                }
+
+                const id = this.editingTemplateId || ('custom_tmpl_' + Date.now());
+                this.templates[id] = { id, name, description: desc, isBuiltin: false, items };
+                this.saveCustomTemplates();
+                this.selectedTemplateId = id;
+                this.renderTemplateSelect();
+                this.closeTemplateEditor();
+            }
+
+            deleteTemplate(templateId) {
+                if (this.templates[templateId] && !this.templates[templateId].isBuiltin) {
+                    delete this.templates[templateId];
+                    this.saveCustomTemplates();
+                    this.selectedTemplateId = Object.keys(this.templates)[0];
+                    this.renderTemplateSelect();
+                    this.openTemplatesModal();
+                }
+            }
+
+            // PLAYER SETUP & BETTING
+            renderSavedPassengerChips() {
+                const container = document.getElementById('saved-passengers-chips');
+                if (!container) return;
+                container.innerHTML = '';
+
+                if (this.savedPlayerNames.length === 0) {
+                    container.innerHTML = '<span class="text-[10px] text-slate-500 italic">No saved passengers yet.</span>';
+                    return;
+                }
+
+                this.savedPlayerNames.forEach(name => {
+                    const isAlreadyAdded = this.setupPlayers.includes(name);
+                    const chip = document.createElement('div');
+                    chip.className = `px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${
+                        isAlreadyAdded 
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                        : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-slate-500'
+                    }`;
+
+                    chip.innerHTML = `
+                        <span onclick="app.toggleQuickPassenger('${name}')">${isAlreadyAdded ? '<i class="fa-solid fa-check text-[10px]"></i>' : '<i class="fa-solid fa-plus text-[10px]"></i>'} ${name}</span>
+                        <button onclick="event.stopPropagation(); app.deleteSavedPassenger('${name}')" class="text-slate-500 hover:text-rose-400 ml-1 text-[10px]">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    `;
+                    container.appendChild(chip);
+                });
+            }
+
+            toggleQuickPassenger(name) {
+                if (this.setupPlayers.includes(name)) {
+                    if (this.setupPlayers.length > 2) {
+                        this.setupPlayers = this.setupPlayers.filter(p => p !== name);
+                    }
+                } else {
+                    if (this.setupPlayers.length < 6) {
+                        this.setupPlayers.push(name);
+                    }
+                }
+                this.saveLastPlayerSetup();
+                this.renderSavedPassengerChips();
+                this.renderPlayerInputs();
+            }
+
+            deleteSavedPassenger(name) {
+                this.savedPlayerNames = this.savedPlayerNames.filter(n => n !== name);
+                this.saveSavedPlayerNames();
+                this.renderSavedPassengerChips();
+            }
+
+            persistPlayerName(name) {
+                const trimmed = name.trim();
+                if (trimmed && !this.savedPlayerNames.includes(trimmed)) {
+                    this.savedPlayerNames.push(trimmed);
+                    this.saveSavedPlayerNames();
+                    this.renderSavedPassengerChips();
+                }
+            }
+
+            renderPlayerInputs() {
+                const container = document.getElementById('players-list-inputs');
+                container.innerHTML = '';
+
+                this.setupPlayers.forEach((name, index) => {
+                    const color = PLAYER_COLORS[index % PLAYER_COLORS.length];
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center gap-2';
+                    row.innerHTML = `
+                        <div class="w-7 h-7 rounded-lg ${color.bg} flex items-center justify-center text-slate-950 font-bold text-xs flex-shrink-0">
+                            ${index + 1}
+                        </div>
+                        <input type="text" value="${name}" onchange="app.updatePlayerName(${index}, this.value)" 
+                               class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-medium outline-none focus:border-amber-500">
+                        ${this.setupPlayers.length > 2 ? `
+                            <button onclick="app.removePlayerInput(${index})" class="text-slate-500 hover:text-rose-400 p-2 text-sm">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    `;
+                    container.appendChild(row);
+                });
+
+                document.getElementById('player-count-badge').textContent = `${this.setupPlayers.length} Players`;
+                document.getElementById('add-player-btn').style.display = this.setupPlayers.length >= 6 ? 'none' : 'flex';
+            }
+
+            addPlayerInput() {
+                if (this.setupPlayers.length < 6) {
+                    const defaultName = `Player ${this.setupPlayers.length + 1}`;
+                    this.setupPlayers.push(defaultName);
+                    this.saveLastPlayerSetup();
+                    this.renderSavedPassengerChips();
+                    this.renderPlayerInputs();
+                }
+            }
+
+            removePlayerInput(index) {
+                if (this.setupPlayers.length > 2) {
+                    this.setupPlayers.splice(index, 1);
+                    this.saveLastPlayerSetup();
+                    this.renderSavedPassengerChips();
+                    this.renderPlayerInputs();
+                }
+            }
+
+            updatePlayerName(index, name) {
+                const finalName = name.trim() || `Player ${index + 1}`;
+                this.setupPlayers[index] = finalName;
+                this.persistPlayerName(finalName);
+                this.saveLastPlayerSetup();
+                this.renderSavedPassengerChips();
+            }
+
+            startTrip() {
+                const tmpl = this.templates[this.selectedTemplateId] || Object.values(this.templates)[0];
+                const routeNameInput = document.getElementById('trip-route-name').value.trim();
+                const routeName = routeNameInput || tmpl.name + ' Drive';
+
+                this.persistRouteName(routeName);
+                this.saveRouteTemplatePair(routeName, tmpl.id);
+
+                let groupTarget = 300;
+                if (this.gameMode === 'target') {
+                    const targetInput = document.getElementById('group-target-input');
+                    groupTarget = targetInput ? parseInt(targetInput.value, 10) || 300 : 300;
+                }
+
+                const players = this.setupPlayers.map((name, index) => ({
+                    id: 'p_' + index + '_' + Date.now(),
+                    name: name,
+                    score: 0,
+                    colorIndex: index % PLAYER_COLORS.length
+                }));
+
+                this.session = {
+                    active: true,
+                    gameMode: this.gameMode,
+                    tripId: 'trip_' + Date.now(),
+                    startTimeIso: new Date().toISOString(),
+                    routeName: routeName,
+                    templateName: tmpl.name,
+                    items: JSON.parse(JSON.stringify(tmpl.items)),
+                    players: players,
+                    groupScore: 0,
+                    groupTarget: groupTarget,
+                    activePlayerId: players[0].id,
+                    history: []
+                };
+
+                this.saveActiveSession();
+                this.renderGameDashboard();
+                this.navigate('game');
+            }
+
+            // GAMEPLAY DASHBOARD & GEOLOCATION LOGGING
+            renderGameDashboard() {
+                const activeStrip = document.getElementById('active-player-strip');
+                const standingsTitle = document.getElementById('standings-header-title');
+
+                if (this.session.gameMode === 'target') {
+                    activeStrip.classList.add('hidden');
+                    standingsTitle.textContent = 'Group Target Progress';
+                } else {
+                    activeStrip.classList.remove('hidden');
+                    standingsTitle.textContent = 'Live Standings';
+                    this.renderActivePlayerSelector();
+                }
+
+                this.renderTargetsGrid();
+                this.renderLiveStandings();
+                this.renderRecentLog();
+            }
+
+            renderActivePlayerSelector() {
+                const container = document.getElementById('active-player-selector');
+                container.innerHTML = '';
+
+                this.session.players.forEach(player => {
+                    const color = PLAYER_COLORS[player.colorIndex];
+                    const isActive = player.id === this.session.activePlayerId;
+                    
+                    const btn = document.createElement('button');
+                    btn.onclick = () => app.setActivePlayer(player.id);
+                    btn.className = `p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                        isActive 
+                        ? `${color.bg} text-slate-950 font-bold border-transparent shadow-lg scale-[1.02]` 
+                        : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`;
+
+                    btn.innerHTML = `
+                        <div class="truncate">
+                            <div class="text-xs truncate">${player.name}</div>
+                            <div class="text-sm font-extrabold">${player.score} <span class="text-[10px] font-normal opacity-80">pts</span></div>
+                        </div>
+                        ${isActive ? '<i class="fa-solid fa-circle-check text-slate-950"></i>' : ''}
+                    `;
+                    container.appendChild(btn);
+                });
+            }
+
+            setActivePlayer(playerId) {
+                this.session.activePlayerId = playerId;
+                this.saveActiveSession();
+                this.renderActivePlayerSelector();
+            }
+
+            renderTargetsGrid() {
+                const container = document.getElementById('targets-grid');
+                container.innerHTML = '';
+
+                this.session.items.forEach(item => {
+                    const btn = document.createElement('button');
+                    btn.onclick = () => app.logSpotWithGPS(item);
+                    btn.className = 'glass-panel p-3.5 rounded-2xl flex flex-col justify-between items-start text-left hover:border-amber-500/50 btn-active relative group';
+                    
+                    btn.innerHTML = `
+                        <div class="w-full flex justify-between items-start mb-1.5">
+                            <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 text-amber-400 flex items-center justify-center text-base">
+                                <i class="fa-solid ${item.icon}"></i>
+                            </div>
+                            <span class="text-xs font-black px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-full">
+                                +${item.points}
+                            </span>
+                        </div>
+                        <div class="font-bold text-sm text-white truncate w-full">${item.name}</div>
+                        ${item.desc ? `<div class="text-[10px] text-slate-400 truncate w-full mt-0.5">${item.desc}</div>` : ''}
+                    `;
+                    container.appendChild(btn);
+                });
+            }
+
+            logSpotWithGPS(item) {
+                const timestampIso = new Date().toISOString();
+                const displayTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                let player = null;
+                if (this.session.gameMode === 'topscorer') {
+                    player = this.session.players.find(p => p.id === this.session.activePlayerId);
+                    if (player) player.score += item.points;
+                } else {
+                    this.session.groupScore += item.points;
+                }
+
+                const logEntry = {
+                    id: 'log_' + Date.now(),
+                    itemName: item.name,
+                    points: item.points,
+                    playerId: player ? player.id : 'group',
+                    playerName: player ? player.name : 'Group Spot',
+                    isoTimestamp: timestampIso,
+                    displayTime: displayTime,
+                    latitude: null,
+                    longitude: null,
+                    gpsStatus: 'Locating...'
+                };
+
+                this.session.history.unshift(logEntry);
+
+                // Attempt HTML5 Geolocation capture
+                if ('geolocation' in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            logEntry.latitude = parseFloat(position.coords.latitude.toFixed(6));
+                            logEntry.longitude = parseFloat(position.coords.longitude.toFixed(6));
+                            logEntry.gpsStatus = `${logEntry.latitude}, ${logEntry.longitude}`;
+                            this.saveActiveSession();
+                            this.renderRecentLog();
+                        },
+                        (error) => {
+                            logEntry.gpsStatus = 'GPS Unavailable';
+                            this.saveActiveSession();
+                            this.renderRecentLog();
+                        },
+                        { timeout: 5000, enableHighAccuracy: true }
+                    );
+                } else {
+                    logEntry.gpsStatus = 'GPS Not Supported';
+                }
+
+                this.saveActiveSession();
+                if (this.session.gameMode === 'topscorer') this.renderActivePlayerSelector();
+                this.renderLiveStandings();
+                this.renderRecentLog();
+            }
+
+            undoLastSpot() {
+                if (this.session.history.length === 0) return;
+
+                const lastLog = this.session.history.shift();
+
+                if (this.session.gameMode === 'topscorer') {
+                    const player = this.session.players.find(p => p.id === lastLog.playerId);
+                    if (player) {
+                        player.score = Math.max(0, player.score - lastLog.points);
+                    }
+                } else {
+                    this.session.groupScore = Math.max(0, this.session.groupScore - lastLog.points);
+                }
+
+                this.saveActiveSession();
+                if (this.session.gameMode === 'topscorer') this.renderActivePlayerSelector();
+                this.renderLiveStandings();
+                this.renderRecentLog();
+            }
+
+            renderLiveStandings() {
+                const container = document.getElementById('live-standings-list');
+                const undoBtn = document.getElementById('undo-btn');
+                
+                undoBtn.disabled = this.session.history.length === 0;
+                container.innerHTML = '';
+
+                if (this.session.gameMode === 'target') {
+                    // Render Group Target Score Progress Bar
+                    const progressPct = Math.min(100, Math.round((this.session.groupScore / this.session.groupTarget) * 100));
+                    const item = document.createElement('div');
+                    item.className = 'space-y-1.5';
+                    item.innerHTML = `
+                        <div class="flex justify-between text-xs">
+                            <span class="font-bold text-amber-400">Team Total Score</span>
+                            <span class="font-semibold text-slate-300">
+                                <span class="text-white font-black text-sm">${this.session.groupScore}</span> / ${this.session.groupTarget} pts (${progressPct}%)
+                            </span>
+                        </div>
+                        <div class="w-full h-3.5 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-300" style="width: ${progressPct}%"></div>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                } else {
+                    // Render Individual Standings
+                    const maxVal = Math.max(...this.session.players.map(p => p.score), 100);
+
+                    this.session.players.forEach(player => {
+                        const color = PLAYER_COLORS[player.colorIndex];
+                        const item = document.createElement('div');
+                        item.className = 'space-y-1';
+                        item.innerHTML = `
+                            <div class="flex justify-between text-xs">
+                                <span class="font-bold text-slate-200">${player.name}</span>
+                                <span class="font-semibold text-slate-400">
+                                    <span class="text-white font-extrabold">${player.score}</span> pts
+                                </span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div class="h-full ${color.bg} rounded-full transition-all duration-300" style="width: ${Math.min(100, (player.score / maxVal) * 100)}%"></div>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                }
+            }
+
+            renderRecentLog() {
+                const container = document.getElementById('recent-log-container');
+                if (this.session.history.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 italic text-center">No sightings logged yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                this.session.history.slice(0, 6).forEach(log => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center border-b border-slate-800/60 pb-1 last:border-none';
+                    row.innerHTML = `
+                        <div>
+                            <div><strong class="text-white">${log.playerName}</strong> &bull; ${log.itemName}</div>
+                            <div class="text-[10px] text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${log.displayTime} | <i class="fa-solid fa-location-pin mr-1"></i>${log.gpsStatus}</div>
+                        </div>
+                        <span class="text-amber-400 font-bold text-xs flex-shrink-0">+${log.points}</span>
+                    `;
+                    container.appendChild(row);
+                });
+            }
+
+            // RESULTS, ARCHIVE & LEADERBOARDS
+            confirmEndTrip() {
+                this.openConfirmModal(
+                    'Finish Journey?',
+                    'This will end scoring, save trip history to leaderboards, and render the route map.',
+                    () => this.finishTrip()
+                );
+            }
+
+            finishTrip() {
+                this.session.active = false;
+                this.saveActiveSession();
+
+                let winnerName = 'Group';
+                let winnerScore = this.session.groupScore;
+
+                if (this.session.gameMode === 'topscorer') {
+                    const sorted = [...this.session.players].sort((a, b) => b.score - a.score);
+                    winnerName = sorted[0] ? sorted[0].name : 'Nobody';
+                    winnerScore = sorted[0] ? sorted[0].score : 0;
+                }
+
+                // Save Completed Trip to History Archive
+                const archiveRecord = {
+                    tripId: this.session.tripId || 'trip_' + Date.now(),
+                    dateIso: new Date().toISOString(),
+                    dateFormatted: new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+                    gameMode: this.session.gameMode,
+                    routeName: this.session.routeName,
+                    templateName: this.session.templateName,
+                    winnerName: winnerName,
+                    winnerScore: winnerScore,
+                    groupScore: this.session.groupScore,
+                    groupTarget: this.session.groupTarget,
+                    players: this.session.players,
+                    history: this.session.history
+                };
+
+                this.tripHistory.unshift(archiveRecord);
+                this.saveTripHistory();
+
+                const subtitle = document.getElementById('results-badge-subtitle');
+                const winnerNameEl = document.getElementById('winner-name');
+                const winnerScoreEl = document.getElementById('winner-score');
+                const standingsTitle = document.getElementById('final-standings-title');
+                const board = document.getElementById('final-leaderboard');
+                board.innerHTML = '';
+
+                if (this.session.gameMode === 'target') {
+                    subtitle.textContent = 'Group Wager Target Result';
+                    winnerNameEl.textContent = `${this.session.groupScore} PTS`;
+                    const diff = Math.abs(this.session.groupScore - this.session.groupTarget);
+                    const hitTarget = diff <= 25;
+                    winnerScoreEl.textContent = hitTarget ? '🎯 Target Hit!' : `Target: ${this.session.groupTarget} pts (diff: ${diff})`;
+                    standingsTitle.textContent = 'Team Summary';
+
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-900/90 border border-slate-800 p-4 rounded-xl text-center space-y-1';
+                    card.innerHTML = `
+                        <div class="text-xs text-slate-400">Total Sightings Logged</div>
+                        <div class="text-2xl font-black text-amber-400">${this.session.history.length} Spots</div>
+                        <div class="text-xs text-slate-300">Passengers: ${this.session.players.map(p => p.name).join(', ')}</div>
+                    `;
+                    board.appendChild(card);
+                } else {
+                    subtitle.textContent = 'Journey Champion';
+                    winnerNameEl.textContent = winnerName;
+                    winnerScoreEl.textContent = `Total Score: ${winnerScore} Points`;
+                    standingsTitle.textContent = 'Final Standings';
+
+                    const sorted = [...this.session.players].sort((a, b) => b.score - a.score);
+                    sorted.forEach((player, rank) => {
+                        const color = PLAYER_COLORS[player.colorIndex];
+                        const card = document.createElement('div');
+                        card.className = 'bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between';
+                        card.innerHTML = `
+                            <div class="flex items-center gap-2.5">
+                                <span class="font-black text-sm text-slate-400">#${rank + 1}</span>
+                                <span class="font-bold text-base text-white">${player.name}</span>
+                            </div>
+                            <span class="text-xl font-black ${color.text}">${player.score} <span class="text-xs text-slate-400 font-normal">pts</span></span>
+                        `;
+                        board.appendChild(card);
+                    });
+                }
+
+                this.navigate('results');
+            }
+
+            renderHistoryLeaderboardsPage() {
+                const select = document.getElementById('route-leaderboard-select');
+                select.innerHTML = '<option value="ALL">All Routes (Overall Standings)</option>';
+
+                const uniqueRoutes = new Set([...this.savedRoutes, ...this.tripHistory.map(t => t.routeName)]);
+                uniqueRoutes.forEach(route => {
+                    const opt = document.createElement('option');
+                    opt.value = route;
+                    opt.textContent = route;
+                    select.appendChild(opt);
+                });
+
+                document.getElementById('route-stats-count').textContent = `${this.tripHistory.length} Journeys Logged`;
+                this.renderRouteLeaderboards('ALL');
+                this.renderPastTripsArchiveList();
+            }
+
+            renderRouteLeaderboards(selectedRoute) {
+                const container = document.getElementById('leaderboard-list-container');
+                const title = document.getElementById('leaderboard-card-title');
+                container.innerHTML = '';
+
+                const filteredTrips = selectedRoute === 'ALL'
+                    ? this.tripHistory
+                    : this.tripHistory.filter(t => t.routeName === selectedRoute);
+
+                title.textContent = selectedRoute === 'ALL' ? 'Passenger Hall of Fame' : `${selectedRoute} Leaderboard`;
+
+                if (filteredTrips.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 italic text-center py-4 text-xs">No completed journeys logged for this route yet.</div>';
+                    return;
+                }
+
+                // Compute Passenger Stats
+                const statsMap = {};
+                filteredTrips.forEach(trip => {
+                    if (trip.players) {
+                        trip.players.forEach(p => {
+                            if (!statsMap[p.name]) {
+                                statsMap[p.name] = { name: p.name, wins: 0, totalScore: 0, trips: 0, bestSingleScore: 0 };
+                            }
+                            statsMap[p.name].trips += 1;
+                            statsMap[p.name].totalScore += p.score;
+                            if (p.score > statsMap[p.name].bestSingleScore) statsMap[p.name].bestSingleScore = p.score;
+                            if (trip.winnerName === p.name) statsMap[p.name].wins += 1;
+                        });
+                    }
+                });
+
+                const sortedPassengers = Object.values(statsMap).sort((a, b) => {
+                    if (b.wins !== a.wins) return b.wins - a.wins;
+                    return b.totalScore - a.totalScore;
+                });
+
+                if (sortedPassengers.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 italic text-center py-4 text-xs">No individual player data recorded yet.</div>';
+                    return;
+                }
+
+                sortedPassengers.forEach((p, idx) => {
+                    const winRate = Math.round((p.wins / p.trips) * 100);
+                    const avgScore = Math.round(p.totalScore / p.trips);
+
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-xs';
+                    card.innerHTML = `
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-6 h-6 rounded-lg ${idx === 0 ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-400 font-bold'} flex items-center justify-center text-xs">
+                                #${idx + 1}
+                            </span>
+                            <div>
+                                <div class="font-bold text-white text-sm flex items-center gap-1.5">
+                                    ${p.name}
+                                    ${idx === 0 ? '<i class="fa-solid fa-crown text-amber-400 text-xs"></i>' : ''}
+                                </div>
+                                <div class="text-[10px] text-slate-400">${p.trips} Trips &bull; Best: <span class="text-amber-400 font-bold">${p.bestSingleScore} pts</span></div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-extrabold text-white text-sm">${p.wins} Wins <span class="text-[10px] text-amber-400 font-normal">(${winRate}%)</span></div>
+                            <div class="text-[10px] text-slate-400">Avg: ${avgScore} pts</div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            renderPastTripsArchiveList() {
+                const container = document.getElementById('past-trips-archive-list');
+                container.innerHTML = '';
+
+                if (this.tripHistory.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 italic text-center py-4 text-xs">No saved journeys in archive.</div>';
+                    return;
+                }
+
+                this.tripHistory.forEach(trip => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 p-3 rounded-xl cursor-pointer transition-colors flex justify-between items-center';
+                    card.onclick = () => app.openTripDetailsModal(trip.tripId);
+                    card.innerHTML = `
+                        <div>
+                            <div class="font-bold text-white text-xs">${trip.routeName}</div>
+                            <div class="text-[10px] text-slate-400">${trip.dateFormatted} &bull; ${trip.gameMode === 'target' ? 'Group Target' : 'Top Scorer'}</div>
+                        </div>
+                        <div class="text-right flex items-center gap-2">
+                            <div>
+                                <div class="text-xs font-bold text-amber-400">${trip.winnerName}</div>
+                                <div class="text-[10px] text-slate-400">${trip.winnerScore} pts</div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            openTripDetailsModal(tripId) {
+                const trip = this.tripHistory.find(t => t.tripId === tripId);
+                if (!trip) return;
+
+                document.getElementById('archive-modal-title').textContent = trip.routeName;
+                document.getElementById('archive-modal-subtitle').textContent = `${trip.dateFormatted} • ${trip.templateName}`;
+                document.getElementById('archive-winner-name').textContent = trip.winnerName;
+                document.getElementById('archive-winner-score').textContent = `Result Score: ${trip.winnerScore} Points`;
+
+                const scoresList = document.getElementById('archive-scores-list');
+                scoresList.innerHTML = '';
+
+                if (trip.gameMode === 'target') {
+                    const row = document.createElement('div');
+                    row.className = 'bg-slate-900 border border-slate-800 p-2.5 rounded-lg text-xs space-y-1';
+                    row.innerHTML = `
+                        <div class="flex justify-between font-bold text-white">
+                            <span>Team Group Score:</span>
+                            <span class="text-amber-400">${trip.groupScore} pts</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400">Target Goal: ${trip.groupTarget} pts</div>
+                    `;
+                    scoresList.appendChild(row);
+                } else if (trip.players) {
+                    trip.players.forEach(p => {
+                        const row = document.createElement('div');
+                        row.className = 'bg-slate-900 border border-slate-800 p-2 rounded-lg flex justify-between items-center';
+                        row.innerHTML = `
+                            <span class="font-bold text-white">${p.name}</span>
+                            <span class="font-extrabold text-amber-400">${p.score} pts</span>
+                        `;
+                        scoresList.appendChild(row);
+                    });
+                }
+
+                const sightingsList = document.getElementById('archive-sightings-list');
+                if (trip.history && trip.history.length > 0) {
+                    sightingsList.innerHTML = '';
+                    trip.history.forEach(log => {
+                        const item = document.createElement('div');
+                        item.className = 'flex justify-between border-b border-slate-800/60 pb-1 last:border-none';
+                        item.innerHTML = `
+                            <span><strong>${log.playerName}</strong> &bull; ${log.itemName}</span>
+                            <span class="text-amber-400 font-bold">+${log.points}</span>
+                        `;
+                        sightingsList.appendChild(item);
+                    });
+                } else {
+                    sightingsList.innerHTML = '<div class="text-slate-500 italic text-center">No individual sightings logged.</div>';
+                }
+
+                document.getElementById('trip-details-modal').classList.remove('hidden');
+
+                // Render Map for Archived Trip
+                setTimeout(() => {
+                    const validLocs = trip.history ? trip.history.filter(h => h.latitude && h.longitude) : [];
+                    if (!this.archiveLeafletMap) {
+                        this.archiveLeafletMap = L.map('archive-leaflet-map').setView([51.505, -0.09], 10);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(this.archiveLeafletMap);
+                    }
+                    this.archiveMapMarkers.forEach(m => this.archiveLeafletMap.removeLayer(m));
+                    this.archiveMapMarkers = [];
+
+                    if (validLocs.length > 0) {
+                        const bounds = [];
+                        validLocs.forEach(log => {
+                            const marker = L.marker([log.latitude, log.longitude])
+                                .addTo(this.archiveLeafletMap)
+                                .bindPopup(`<b>${log.playerName}</b> spotted ${log.itemName} (+${log.points} pts)`);
+                            this.archiveMapMarkers.push(marker);
+                            bounds.push([log.latitude, log.longitude]);
+                        });
+                        this.archiveLeafletMap.fitBounds(bounds, { padding: [20, 20] });
+                    } else {
+                        this.archiveLeafletMap.setView([51.505, -0.09], 5);
+                    }
+                }, 150);
+            }
+
+            closeTripDetailsModal() {
+                document.getElementById('trip-details-modal').classList.add('hidden');
+            }
+
+            renderResultsMap() {
+                const validLocations = this.session.history.filter(h => h.latitude && h.longitude);
+                document.getElementById('map-marker-count').textContent = `${validLocations.length} / ${this.session.history.length} Spots Plotted`;
+
+                if (!this.leafletMap) {
+                    this.leafletMap = L.map('leaflet-map').setView([51.505, -0.09], 10);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; OpenStreetMap'
+                    }).addTo(this.leafletMap);
+                }
+
+                this.mapMarkers.forEach(m => this.leafletMap.removeLayer(m));
+                this.mapMarkers = [];
+
+                if (validLocations.length > 0) {
+                    const bounds = [];
+                    validLocations.forEach(log => {
+                        const marker = L.marker([log.latitude, log.longitude])
+                            .addTo(this.leafletMap)
+                            .bindPopup(`
+                                <div class="text-slate-900">
+                                    <strong>${log.playerName}</strong> spotted <strong>${log.itemName}</strong> (+${log.points} pts)<br>
+                                    <small>${log.displayTime}</small>
+                                </div>
+                            `);
+                        this.mapMarkers.push(marker);
+                        bounds.push([log.latitude, log.longitude]);
+                    });
+                    this.leafletMap.fitBounds(bounds, { padding: [30, 30] });
+                } else {
+                    this.leafletMap.setView([51.505, -0.09], 5);
+                }
+            }
+
+            exportTripCSV() {
+                let csv = 'Timestamp,Player,Item Spotted,Points,Latitude,Longitude,GPS Status\n';
+                this.session.history.forEach(log => {
+                    csv += `"${log.isoTimestamp}","${log.playerName}","${log.itemName}",${log.points},"${log.latitude || ''}","${log.longitude || ''}","${log.gpsStatus}"\n`;
+                });
+
+                this.downloadFile(csv, `spotter_trip_${Date.now()}.csv`, 'text/csv');
+            }
+
+            exportTripJSON() {
+                const dataStr = JSON.stringify(this.session, null, 2);
+                this.downloadFile(dataStr, `spotter_trip_${Date.now()}.json`, 'application/json');
+            }
+
+            downloadFile(content, fileName, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            // RESET & CONFIRM HELPERS
+            confirmReset() {
+                this.openConfirmModal(
+                    'Reset Application?',
+                    'This will reset ongoing trip data and return to setup.',
+                    () => {
+                        this.session.active = false;
+                        this.saveActiveSession();
+                        this.navigate('setup');
+                    }
+                );
+            }
+
+            openConfirmModal(title, desc, onConfirm) {
+                document.getElementById('confirm-title').textContent = title;
+                document.getElementById('confirm-desc').textContent = desc;
+                this.pendingConfirmCallback = onConfirm;
+                document.getElementById('confirm-modal').classList.remove('hidden');
+
+                document.getElementById('confirm-action-btn').onclick = () => {
+                    if (this.pendingConfirmCallback) this.pendingConfirmCallback();
+                    this.closeConfirmModal(true);
+                };
+            }
+
+            closeConfirmModal() {
+                document.getElementById('confirm-modal').classList.add('hidden');
+                this.pendingConfirmCallback = null;
+            }
+        }
+
+        let app;
+        window.addEventListener('DOMContentLoaded', () => {
+            app = new SpotterApp();
+        });
+    </script>
+</body>
+</html>
